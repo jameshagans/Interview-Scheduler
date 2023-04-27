@@ -1,30 +1,38 @@
-import React, { useState } from "react";
-
+import React, { useState, useEffect } from "react";
 import DayList from "./DayList";
 import "components/Application.scss";
-
-
-const days = [
-  {
-    id: 1,
-    name: "Monday",
-    spots: 2,
-  },
-  {
-    id: 2,
-    name: "Tuesday",
-    spots: 5,
-  },
-  {
-    id: 3,
-    name: "Wednesday",
-    spots: 0,
-  },
-];
+import Appointment from "components/Appointment";
+import { getAppointmentsForDay, getInterview, getInterviewersForDay } from "helpers/selectors";
+import useApplicationData from "hooks/useApplicationData";
 
 export default function Application(props) {
 
-  const [day, setDay] = useState("Monday");
+  const {
+    state,
+    setDay,
+    bookInterview,
+    cancelInterview
+  } = useApplicationData();
+
+
+  const dailyAppointments = getAppointmentsForDay(state, state.day);
+  const dailyInterviewrers = getInterviewersForDay(state, state.day);
+
+
+
+  const NewAppointments = dailyAppointments.map((appointment) => {
+    const interview = getInterview(state, appointment.interview);
+    return <Appointment
+      key={appointment.id}
+      {...appointment}
+      interview={interview}
+      interviewers={dailyInterviewrers}
+      bookInterview={bookInterview}
+      cancelInterview={cancelInterview}
+
+    />;
+  });
+
 
   return (
     <main className="layout">
@@ -37,9 +45,9 @@ export default function Application(props) {
         <hr className="sidebar__separator sidebar--centered" />
         <nav className="sidebar__menu">
           <DayList
-            days={days}
-            value={day}
-            onchange={setDay}
+            days={state.days}
+            value={state.day}
+            onChange={setDay}
           />
         </nav>
         <img
@@ -49,7 +57,8 @@ export default function Application(props) {
         />
       </section>
       <section className="schedule">
-        {/* Replace this with the schedule elements durint the "The Scheduler" activity. */}
+        {NewAppointments}
+        <Appointment key="last" time="5pm" />
       </section>
     </main>
   );
