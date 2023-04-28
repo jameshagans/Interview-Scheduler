@@ -1,108 +1,100 @@
-import {
-  useState, useEffect
-} from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 
-const useApplicationData = () => {
+export default function useApplicationData() {
   const [state, setState] = useState({
     day: "Monday",
     days: [],
     appointments: {},
-    interviewers: {}
+    interviewers: {},
   });
 
-  const setDay = day => setState({ ...state, day });
+  const setDay = (day) => setState((prev) => ({ ...prev, day }));
 
-
+  // get scheduler data from api
   useEffect(() => {
     Promise.all([
-      axios.get('/api/days'),
-      axios.get('/api/appointments'),
-      axios.get('/api/interviewers')
-    ]).then((response) => {
-      const days = response[0].data;
-      const appointments = response[1].data;
-      const interviewers = response[2].data;
-      setState(prev => ({ ...prev, days, appointments, interviewers }));
-    }).catch(e => console.log('There was an error: ', e));
+      axios.get("/api/days"),
+      axios.get("/api/appointments"),
+      axios.get("/api/interviewers"),
+    ]).then((all) => {
+      setState((prev) => ({
+        ...prev,
+        days: all[0].data,
+        appointments: all[1].data,
+        interviewers: all[2].data,
+      }));
+      // console.log("days", all[0].data, "appointments", all[1].data, "interviewers", all[2].data);
+    });
   }, []);
 
-  const bookInterview = function(id, interview) {
-    console.log(id, interview);
-
-    // replace value of interview key  
+  function bookInterview(id, interview) {
+    // replace current value of interview key with new value
     const appointment = {
       ...state.appointments[id],
-      interview: { ...interview }
+      interview: { ...interview },
     };
-
-    // replace existing appointment with matching id 
+    // replace existing record with matching id
     const appointments = {
       ...state.appointments,
-      [id]: appointment
+      [id]: appointment,
     };
+    // makes a request to API to update with new interview
+    return axios.put(`/api/appointments/${id}`, appointment).then((res) => {
+      const days = updateSpots(state.day, state.days, appointments);
+      setState({
+        ...state,
+        appointments,
+        days,
+      });
+    });
+  }
 
-    // update the database with the interview data, setting a new state object 
-    return axios.put(`/api/appointments/${id}`, appointment)
-      .then((res) => {
-        console.log('RES: ', res);
-        const days = updateSpots('bookAppointment')
-        setState({
-          ...state,
-          appointments,
-          days
-        });
-      })
-  };
-
-
-  const cancelInterview = (id) => {
-    // set interview value to null 
+  function cancelInterview(id) {
+    // set current value of interview key to null
     const appointment = {
       ...state.appointments[id],
       interview: null,
     };
-
-    // replace existing appointment with matching id 
+    // replace existing record with matching id
     const appointments = {
       ...state.appointments,
-      [id]: appointment
+      [id]: appointment,
     };
-
-    return axios.delete(`/api/appointments/${id}`)
-      .then((res) => {
-        const days = updateSpots()
-        setState({
-          ...state,
-          appointments,
-          days
-        });
+    // make API request to delete appointment
+    return axios.delete(`/api/appointments/${id}`).then((res) => {
+      const days = updateSpots(state.day, state.days, appointments);
+      setState({
+        ...state,
+        appointments,
+        days,
       });
-  };
+    });
+  }
 
-  const updateSpots = (reqType) => {
-
-     const days = [];
-    for (const day of state.days) {
-      console.log('DAYS =================', day);
-      if (day.name === state.day) {
-        if (reqType === 'bookAppointment') {
-            days.push({ ...day, spots: day.spots - 1 })
-        } else {
-          days.push({ ...day, spots: day.spots + 1 })
-        }
-      } else {
-         days.push(day)
+  // check for available slots in a day
+  const availableSlots = (day, appointments) => {
+    let count = 0;
+    for (const id of day.appointments) {
+      const appointment = appointments[id];
+      if (!appointment.interview) {
+        count++;
       }
-   
     }
-    return days;
+    return count;
   };
 
-  return { setDay, bookInterview, cancelInterview, state };
-};
+  // function to check for available slots and updates info
+  const updateSpots = function (dayName, days, appointments) {
+    const newDaysArr = days.map((day) => {
+      if (day.name === dayName) {
+        const slots = availableSlots(day, appointments);
+        return { ...day, spots: slots };
+      }
+      return day;
+    });
+    return newDaysArr;
+  };
 
-export default useApplicationData;
-
-
-
+  return { state, setDay, bookInterview, cancelInterview };
+}
